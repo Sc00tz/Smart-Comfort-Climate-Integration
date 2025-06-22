@@ -1,0 +1,135 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Smart Comfort Climate Setup",
+        "description": "Configure your smart comfort climate control system. This integration uses external temperature and humidity sensors for accurate room readings and controls your existing climate entity for optimal comfort.",
+        "data": {
+          "name": "Name",
+          "climate_entity": "Climate Entity",
+          "temperature_sensor": "Temperature Sensor",
+          "humidity_sensor": "Humidity Sensor", 
+          "target_feels_like": "Default Target Feels-Like Temperature"
+        },
+        "data_description": {
+          "name": "Friendly name for this Smart Comfort Climate system",
+          "climate_entity": "Your existing AC, heat pump, or climate system to control",
+          "temperature_sensor": "External temperature sensor for accurate room readings",
+          "humidity_sensor": "External humidity sensor for dew point calculations",
+          "target_feels_like": "Initial comfort target (what you want it to feel like)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the climate entity",
+      "invalid_auth": "Invalid authentication",
+      "invalid_input": "Invalid input - please check your entity selections",
+      "invalid_climate_entity": "Selected climate entity is invalid or unavailable",
+      "invalid_temperature_sensor": "Selected temperature sensor is invalid or has no numeric value",
+      "invalid_humidity_sensor": "Selected humidity sensor is invalid or has no numeric value",
+      "sensors_unavailable": "One or more sensors are currently unavailable",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "Smart Comfort Climate is already configured for this device",
+      "single_instance_allowed": "Only a single configuration of Smart Comfort Climate is allowed"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smart Comfort Climate Options",
+        "description": "Modify the configuration for your Smart Comfort Climate system.",
+        "data": {
+          "target_feels_like": "Default Target Feels-Like Temperature"
+        },
+        "data_description": {
+          "target_feels_like": "Default comfort target when the system is first enabled"
+        }
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "smart_comfort_climate": {
+        "state_attributes": {
+          "actual_temperature": {
+            "name": "Actual Temperature"
+          },
+          "humidity": {
+            "name": "Humidity" 
+          },
+          "dew_point": {
+            "name": "Dew Point"
+          },
+          "comfort_status": {
+            "name": "Comfort Status"
+          },
+          "feels_like_difference": {
+            "name": "Feels-Like Difference"
+          },
+          "underlying_hvac_mode": {
+            "name": "Underlying HVAC Mode"
+          },
+          "humidity_priority": {
+            "name": "Humidity Priority Mode"
+          }
+        }
+      }
+    },
+    "sensor": {
+      "dew_point": {
+        "name": "Dew Point"
+      },
+      "feels_like": {
+        "name": "Feels Like Temperature"
+      },
+      "comfort_status": {
+        "name": "Comfort Status",
+        "state": {
+          "oppressive": "Oppressive",
+          "muggy": "Muggy", 
+          "slightly_humid": "Slightly Humid",
+          "comfortable": "Comfortable",
+          "very_comfortable": "Very Comfortable",
+          "dry": "Dry",
+          "very_dry": "Very Dry"
+        }
+      }
+    }
+  },
+  "services": {
+    "set_comfort_target": {
+      "name": "Set Comfort Target",
+      "description": "Set the target feels-like temperature for comfort control",
+      "fields": {
+        "target_feels_like": {
+          "name": "Target Feels-Like Temperature",
+          "description": "The temperature you want it to feel like"
+        }
+      }
+    }
+  },
+  "issues": {
+    "sensor_unavailable": {
+      "title": "Smart Comfort Climate sensor unavailable",
+      "description": "The {sensor_type} sensor '{entity_id}' is unavailable. Smart Comfort Climate cannot function properly without accurate sensor readings.\n\nPlease check:\n- Sensor device is online and responding\n- Sensor entity exists and has a numeric value\n- Sensor is not in an error state"
+    },
+    "climate_entity_unavailable": {
+      "title": "Smart Comfort Climate entity unavailable", 
+      "description": "The climate entity '{entity_id}' is unavailable. Smart Comfort Climate cannot control your HVAC system.\n\nPlease check:\n- Climate device is online and responding\n- Climate entity exists and is accessible\n- Device has not been renamed or removed"
+    },
+    "invalid_sensor_reading": {
+      "title": "Smart Comfort Climate invalid sensor reading",
+      "description": "The {sensor_type} sensor '{entity_id}' is providing invalid readings. Current value: '{value}'.\n\nSmart Comfort Climate requires valid numeric sensor readings for:\n- Temperature sensors: numeric value in degrees\n- Humidity sensors: numeric value between 0-100%\n\nPlease check sensor calibration and connectivity."
+    }
+  },
+  "exceptions": {
+    "comfort_calculation_failed": {
+      "message": "Failed to calculate comfort metrics - invalid sensor readings"
+    },
+    "climate_control_failed": {
+      "message": "Failed to control climate entity: {error}"
+    }
+  }
+}

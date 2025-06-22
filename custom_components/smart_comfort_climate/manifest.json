@@ -1,0 +1,13 @@
+{
+  "domain": "smart_comfort_climate",
+  "name": "Smart Comfort Climate",
+  "codeowners": ["@yourusername"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/yourusername/smart-comfort-climate",
+  "integration_type": "device",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/yourusername/smart-comfort-climate/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}

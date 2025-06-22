@@ -1,0 +1,7 @@
+{
+  "name": "Smart Comfort Climate",
+  "render_readme": true,
+  "domains": ["climate", "sensor"],
+  "iot_class": "Calculated",
+  "version": "1.0.0"
+}

@@ -14,12 +14,11 @@ from homeassistant.components.climate import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_TEMPERATURE,
-    EVENT_CONFIG_ENTRY_UPDATED,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
     UnitOfTemperature,
 )
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant, callback, Event
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 
@@ -153,11 +152,8 @@ class SmartComfortClimate(ClimateEntity):
         )
 
         # Track config entry updates (for options changes)
-        self.async_on_remove(
-            self.hass.bus.async_listen(
-                EVENT_CONFIG_ENTRY_UPDATED,
-                self._async_config_entry_updated,
-            )
+        self._config_entry.async_on_unload(
+            self._config_entry.add_update_listener(self._async_config_entry_updated)
         )
         
         # Initial update

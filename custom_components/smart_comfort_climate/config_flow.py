@@ -166,7 +166,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize options flow."""
-        super().__init__()  # ← Add this
+        super().__init__()
+        self.config_entry = config_entry  # ← Keep this line!  
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -181,9 +182,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 {
                     vol.Required(
                         CONF_TARGET_FEELS_LIKE,
-                        default=self._config_entry.options.get(  # ← Changed from self.config_entry
+                        default=self.config_entry.options.get(  # ← Use self.config_entry
                             CONF_TARGET_FEELS_LIKE, 
-                            self._config_entry.data.get(CONF_TARGET_FEELS_LIKE, DEFAULT_TARGET_FEELS_LIKE)
+                            self.config_entry.data.get(CONF_TARGET_FEELS_LIKE, DEFAULT_TARGET_FEELS_LIKE)
                         ),
                     ): selector.NumberSelector(
                         selector.NumberSelectorConfig(
@@ -196,9 +197,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     ),
                     vol.Required(
                         CONF_TARGET_HUMIDITY,
-                        default=self._config_entry.options.get(  # ← Changed from self.config_entry
+                        default=self.config_entry.options.get(  # ← Use self.config_entry
                             CONF_TARGET_HUMIDITY,
-                            self._config_entry.data.get(CONF_TARGET_HUMIDITY, DEFAULT_TARGET_HUMIDITY)
+                            self.config_entry.data.get(CONF_TARGET_HUMIDITY, DEFAULT_TARGET_HUMIDITY)
                         ),
                     ): selector.NumberSelector(
                         selector.NumberSelectorConfig(

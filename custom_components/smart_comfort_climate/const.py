@@ -8,9 +8,11 @@ CONF_CLIMATE_ENTITY = "climate_entity"
 CONF_TEMPERATURE_SENSOR = "temperature_sensor"
 CONF_HUMIDITY_SENSOR = "humidity_sensor"
 CONF_TARGET_FEELS_LIKE = "target_feels_like"
+CONF_TARGET_HUMIDITY = "target_humidity"
 
 # Default values
 DEFAULT_TARGET_FEELS_LIKE = 72.0
+DEFAULT_TARGET_HUMIDITY = 45.0
 
 # Comfort thresholds (dew point in °F)
 DEW_POINT_OPPRESSIVE = 65

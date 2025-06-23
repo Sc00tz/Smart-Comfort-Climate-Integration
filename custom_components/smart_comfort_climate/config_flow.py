@@ -8,7 +8,7 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
 
@@ -16,9 +16,11 @@ from .const import (
     CONF_CLIMATE_ENTITY,
     CONF_HUMIDITY_SENSOR,
     CONF_TARGET_FEELS_LIKE,
+    CONF_TARGET_HUMIDITY,
     CONF_TEMPERATURE_SENSOR,
     DEFAULT_NAME,
     DEFAULT_TARGET_FEELS_LIKE,
+    DEFAULT_TARGET_HUMIDITY,
     DOMAIN,
 )
 
@@ -97,6 +99,18 @@ class SmartComfortClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     mode=selector.NumberSelectorMode.BOX,
                 )
             ),
+            vol.Optional(
+                CONF_TARGET_HUMIDITY,
+                default=DEFAULT_TARGET_HUMIDITY
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=30,
+                    max=70,
+                    step=1,
+                    unit_of_measurement="%",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
         })
 
         return self.async_show_form(
@@ -139,3 +153,62 @@ class SmartComfortClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return False
 
         return True
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: config_entries.ConfigEntry):
+        """Create the options flow."""
+        return OptionsFlowHandler(config_entry)
+
+
+class OptionsFlowHandler(config_entries.OptionsFlow):
+    """Smart Comfort Climate config flow options handler."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
+        self.config_entry = config_entry
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage the options."""
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_TARGET_FEELS_LIKE,
+                        default=self.config_entry.options.get(
+                            CONF_TARGET_FEELS_LIKE, 
+                            self.config_entry.data.get(CONF_TARGET_FEELS_LIKE, DEFAULT_TARGET_FEELS_LIKE)
+                        ),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=65,
+                            max=85,
+                            step=0.5,
+                            unit_of_measurement="°F",
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
+                    ),
+                    vol.Required(
+                        CONF_TARGET_HUMIDITY,
+                        default=self.config_entry.options.get(
+                            CONF_TARGET_HUMIDITY,
+                            self.config_entry.data.get(CONF_TARGET_HUMIDITY, DEFAULT_TARGET_HUMIDITY)
+                        ),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=30,
+                            max=70,
+                            step=1,
+                            unit_of_measurement="%",
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
+                    ),
+                }
+            ),
+        )

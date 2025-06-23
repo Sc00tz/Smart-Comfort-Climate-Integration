@@ -14,6 +14,7 @@ from homeassistant.components.climate import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_TEMPERATURE,
+    EVENT_CONFIG_ENTRY_UPDATED,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
     UnitOfTemperature,
@@ -26,7 +27,10 @@ from .const import (
     CONF_CLIMATE_ENTITY,
     CONF_HUMIDITY_SENSOR,
     CONF_TARGET_FEELS_LIKE,
+    CONF_TARGET_HUMIDITY,
     CONF_TEMPERATURE_SENSOR,
+    DEFAULT_TARGET_FEELS_LIKE,
+    DEFAULT_TARGET_HUMIDITY,
     DOMAIN,
     DEW_POINT_OPPRESSIVE,
     DEW_POINT_MUGGY,
@@ -52,11 +56,12 @@ async def async_setup_entry(
     async_add_entities([
         SmartComfortClimate(
             hass,
-            config_entry.entry_id,
+            config_entry,
             config[CONF_CLIMATE_ENTITY],
             config[CONF_TEMPERATURE_SENSOR],
             config[CONF_HUMIDITY_SENSOR],
-            config.get(CONF_TARGET_FEELS_LIKE, 72.0),
+            config.get(CONF_TARGET_FEELS_LIKE, DEFAULT_TARGET_FEELS_LIKE),
+            config.get(CONF_TARGET_HUMIDITY, DEFAULT_TARGET_HUMIDITY),
             config_entry.title,
         )
     ])
@@ -68,23 +73,23 @@ class SmartComfortClimate(ClimateEntity):
     def __init__(
         self,
         hass: HomeAssistant,
-        entry_id: str,
+        config_entry: ConfigEntry,
         climate_entity_id: str,
         temperature_sensor_id: str,
         humidity_sensor_id: str,
         target_feels_like: float,
+        target_humidity: float,
         name: str,
     ) -> None:
         """Initialize the Smart Comfort Climate."""
         self.hass = hass
-        self._entry_id = entry_id
+        self._config_entry = config_entry
         self._climate_entity_id = climate_entity_id
         self._temperature_sensor_id = temperature_sensor_id
         self._humidity_sensor_id = humidity_sensor_id
-        self._target_feels_like = target_feels_like
         self._name = name
         
-        self._attr_unique_id = f"{DOMAIN}_{entry_id}"
+        self._attr_unique_id = f"{DOMAIN}_{config_entry.entry_id}"
         self._attr_name = name
         self._attr_temperature_unit = UnitOfTemperature.FAHRENHEIT
         self._attr_target_temperature_step = 0.5
@@ -114,6 +119,22 @@ class SmartComfortClimate(ClimateEntity):
         # Track underlying climate entity state
         self._underlying_hvac_mode = None
 
+    @property
+    def target_feels_like(self) -> float:
+        """Get the target feels-like temperature from options or config."""
+        return self._config_entry.options.get(
+            CONF_TARGET_FEELS_LIKE,
+            self._config_entry.data.get(CONF_TARGET_FEELS_LIKE, DEFAULT_TARGET_FEELS_LIKE)
+        )
+
+    @property
+    def target_humidity(self) -> float:
+        """Get the target humidity from options or config."""
+        return self._config_entry.options.get(
+            CONF_TARGET_HUMIDITY,
+            self._config_entry.data.get(CONF_TARGET_HUMIDITY, DEFAULT_TARGET_HUMIDITY)
+        )
+
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
         await super().async_added_to_hass()
@@ -130,6 +151,14 @@ class SmartComfortClimate(ClimateEntity):
                 self.hass, entity_ids, self._async_state_changed
             )
         )
+
+        # Track config entry updates (for options changes)
+        self.async_on_remove(
+            self.hass.bus.async_listen(
+                EVENT_CONFIG_ENTRY_UPDATED,
+                self._async_config_entry_updated,
+            )
+        )
         
         # Initial update
         await self._async_update_state()
@@ -139,6 +168,14 @@ class SmartComfortClimate(ClimateEntity):
         """Handle state changes of tracked entities."""
         await self._async_update_state()
         self.async_write_ha_state()
+
+    @callback
+    async def _async_config_entry_updated(self, event) -> None:
+        """Handle config entry updates."""
+        if event.data["config_entry_id"] == self._config_entry.entry_id:
+            # Config entry was updated, re-evaluate comfort control
+            await self._async_update_state()
+            self.async_write_ha_state()
 
     async def _async_update_state(self) -> None:
         """Update the state based on source entities."""
@@ -254,11 +291,17 @@ class SmartComfortClimate(ClimateEntity):
         ]):
             return
             
-        feels_like_diff = self._feels_like_temperature - self._target_feels_like
+        target_feels_like = self.target_feels_like
+        target_humidity = self.target_humidity
+        feels_like_diff = self._feels_like_temperature - target_feels_like
         
-        # Determine action based on dew point and feels-like difference
+        # Determine action based on humidity priority and feels-like difference
         target_mode, target_temp, reason = self._determine_climate_action(
-            self._dew_point, feels_like_diff, self._current_temperature
+            self._dew_point, 
+            feels_like_diff, 
+            self._current_temperature,
+            self._current_humidity,
+            target_humidity
         )
         
         # Execute the action
@@ -284,123 +327,89 @@ class SmartComfortClimate(ClimateEntity):
         
         # Log the action
         _LOGGER.info(
-            "%s: %s - Feels like: %.1f°F (target: %.1f°F), Dew point: %.1f°F",
+            "%s: %s - Feels like: %.1f°F (target: %.1f°F), Humidity: %.1f%% (target: %.1f%%), Dew point: %.1f°F",
             self._name,
             reason,
             self._feels_like_temperature,
-            self._target_feels_like,
+            target_feels_like,
+            self._current_humidity,
+            target_humidity,
             self._dew_point,
         )
 
     def _determine_climate_action(
-        self, dew_point: float, feels_like_diff: float, current_temp: float
+        self, 
+        dew_point: float, 
+        feels_like_diff: float, 
+        current_temp: float,
+        current_humidity: float,
+        target_humidity: float
     ) -> tuple[str, float | None, str]:
-        """Determine the appropriate climate action."""
+        """Determine the appropriate climate action with humidity priority."""
         
-        # Oppressive humidity (dew point > 65°F)
-        if dew_point > DEW_POINT_OPPRESSIVE:
+        # PRIORITY 1: Check if humidity is above target
+        if current_humidity > target_humidity:
+            # Humidity is too high - prioritize dehumidification
+            if feels_like_diff > 2:
+                # Too humid AND too warm - use AC to cool while dehumidifying
+                return (
+                    MODE_PRIORITY_COOL,
+                    min(current_temp - 2, self.target_feels_like - 1),
+                    f"AC mode (humidity {current_humidity:.0f}% > {target_humidity:.0f}% target + warm)"
+                )
+            else:
+                # Too humid but temperature manageable - use dry mode
+                return (
+                    MODE_PRIORITY_DRY,
+                    self.target_feels_like,
+                    f"DRY mode (humidity {current_humidity:.0f}% > {target_humidity:.0f}% target)"
+                )
+        
+        # PRIORITY 2: Humidity is acceptable, check dew point for extreme conditions
+        elif dew_point > DEW_POINT_OPPRESSIVE:
+            # Oppressive dew point even if humidity target is met
             if feels_like_diff > 0:
                 return (
                     MODE_PRIORITY_COOL,
-                    min(current_temp - 3, self._target_feels_like - 2),
-                    "AC mode (oppressive humidity + hot)"
+                    min(current_temp - 3, self.target_feels_like - 2),
+                    "AC mode (oppressive dew point + hot)"
                 )
             else:
                 return (
                     MODE_PRIORITY_DRY,
-                    self._target_feels_like,
-                    "DRY mode (oppressive humidity)"
+                    self.target_feels_like,
+                    "DRY mode (oppressive dew point)"
                 )
         
-        # Muggy conditions (dew point 60-65°F)
-        elif dew_point > DEW_POINT_MUGGY:
-            if feels_like_diff > 2:
-                return (
-                    MODE_PRIORITY_COOL,
-                    min(current_temp - 2, self._target_feels_like - 1),
-                    "AC mode (muggy + warm)"
-                )
-            else:
-                return (
-                    MODE_PRIORITY_DRY,
-                    self._target_feels_like,
-                    "DRY mode (muggy humidity)"
-                )
-        
-        # Slightly humid (dew point 55-60°F)
-        elif dew_point > DEW_POINT_SLIGHTLY_HUMID:
-            if feels_like_diff > 3:
-                return (
-                    MODE_PRIORITY_COOL,
-                    current_temp - 1,
-                    "AC mode (slightly humid + warm)"
-                )
-            elif feels_like_diff > 1:
-                return (
-                    MODE_PRIORITY_DRY,
-                    self._target_feels_like,
-                    "DRY mode (slightly humid)"
-                )
-            elif feels_like_diff > 2:
-                return (
-                    MODE_PRIORITY_COOL,
-                    current_temp - 1,
-                    "AC mode (humidity OK, need cooling)"
-                )
-            else:
-                return (
-                    MODE_PRIORITY_FAN,
-                    None,
-                    "FAN mode (maintaining)"
-                )
-        
-        # Good humidity (dew point 45-55°F)
-        elif dew_point >= DEW_POINT_COMFORTABLE:
-            if feels_like_diff > 2:
-                return (
-                    MODE_PRIORITY_COOL,
-                    current_temp - 1,
-                    "AC mode (good humidity, cooling needed)"
-                )
-            elif feels_like_diff > 1:
-                return (
-                    MODE_PRIORITY_FAN,
-                    None,
-                    "FAN mode (good humidity, slight cooling)"
-                )
-            elif feels_like_diff < -4:
-                return (
-                    MODE_PRIORITY_OFF,
-                    None,
-                    "OFF (good humidity, too cold)"
-                )
-            else:
-                return (
-                    MODE_PRIORITY_FAN,
-                    None,
-                    "FAN mode (perfect conditions)"
-                )
-        
-        # Dry conditions (dew point < 45°F)
+        # PRIORITY 3: Humidity is good, focus on temperature comfort
+        elif feels_like_diff > 2:
+            # Good humidity but too warm - use AC
+            return (
+                MODE_PRIORITY_COOL,
+                current_temp - 1,
+                "AC mode (good humidity, cooling needed)"
+            )
+        elif feels_like_diff > 1:
+            # Good humidity, slightly warm - fan only
+            return (
+                MODE_PRIORITY_FAN,
+                None,
+                "FAN mode (good humidity, slight cooling)"
+            )
+        elif feels_like_diff < -4:
+            # Good humidity but too cold - turn off
+            return (
+                MODE_PRIORITY_OFF,
+                None,
+                "OFF (good humidity, too cold)"
+            )
         else:
-            if feels_like_diff > 3:
-                return (
-                    MODE_PRIORITY_COOL,
-                    current_temp - 1,
-                    "AC mode (dry air, cooling needed)"
-                )
-            elif feels_like_diff < -3:
-                return (
-                    MODE_PRIORITY_OFF,
-                    None,
-                    "OFF (dry and cold)"
-                )
-            else:
-                return (
-                    MODE_PRIORITY_FAN,
-                    None,
-                    "FAN mode (dry air, temp OK)"
-                )
+            # Perfect conditions - fan only for circulation
+            return (
+                MODE_PRIORITY_FAN,
+                None,
+                "FAN mode (perfect conditions)"
+            )
 
     @property
     def current_temperature(self) -> float | None:
@@ -410,7 +419,7 @@ class SmartComfortClimate(ClimateEntity):
     @property
     def target_temperature(self) -> float | None:
         """Return the target temperature (feels-like)."""
-        return self._target_feels_like
+        return self.target_feels_like
 
     @property
     def hvac_mode(self) -> HVACMode | None:
@@ -431,10 +440,11 @@ class SmartComfortClimate(ClimateEntity):
             attrs["comfort_status"] = self._comfort_status
         if self._feels_like_temperature is not None:
             attrs["feels_like_difference"] = round(
-                self._feels_like_temperature - self._target_feels_like, 1
+                self._feels_like_temperature - self.target_feels_like, 1
             )
         attrs["underlying_hvac_mode"] = self._underlying_hvac_mode
-        attrs["humidity_priority"] = self._dew_point > DEW_POINT_SLIGHTLY_HUMID if self._dew_point else False
+        attrs["humidity_priority"] = self._current_humidity > self.target_humidity if self._current_humidity else False
+        attrs["target_humidity"] = self.target_humidity
         return attrs
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
@@ -442,13 +452,17 @@ class SmartComfortClimate(ClimateEntity):
         if (temperature := kwargs.get(ATTR_TEMPERATURE)) is None:
             return
             
-        self._target_feels_like = temperature
+        # Update the config entry options with the new target
+        new_options = dict(self._config_entry.options)
+        new_options[CONF_TARGET_FEELS_LIKE] = temperature
+        
+        self.hass.config_entries.async_update_entry(
+            self._config_entry, options=new_options
+        )
         
         # Trigger immediate re-evaluation
         if self._hvac_mode == HVACMode.AUTO and self._is_on:
             await self._async_execute_comfort_control()
-            
-        self.async_write_ha_state()
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new target hvac mode."""

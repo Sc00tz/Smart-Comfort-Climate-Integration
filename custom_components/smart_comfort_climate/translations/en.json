@@ -9,14 +9,16 @@
           "climate_entity": "Climate Entity",
           "temperature_sensor": "Temperature Sensor",
           "humidity_sensor": "Humidity Sensor", 
-          "target_feels_like": "Default Target Feels-Like Temperature"
+          "target_feels_like": "Default Target Feels-Like Temperature",
+          "target_humidity": "Target Humidity"
         },
         "data_description": {
           "name": "Friendly name for this Smart Comfort Climate system",
           "climate_entity": "Your existing AC, heat pump, or climate system to control",
           "temperature_sensor": "External temperature sensor for accurate room readings",
           "humidity_sensor": "External humidity sensor for dew point calculations",
-          "target_feels_like": "Initial comfort target (what you want it to feel like)"
+          "target_feels_like": "Initial comfort target (what you want it to feel like)",
+          "target_humidity": "Maximum comfortable humidity level (system will dehumidify above this)"
         }
       }
     },
@@ -39,12 +41,14 @@
     "step": {
       "init": {
         "title": "Smart Comfort Climate Options",
-        "description": "Modify the configuration for your Smart Comfort Climate system.",
+        "description": "Modify the comfort targets for your Smart Comfort Climate system. Changes take effect immediately.",
         "data": {
-          "target_feels_like": "Default Target Feels-Like Temperature"
+          "target_feels_like": "Target Feels-Like Temperature",
+          "target_humidity": "Target Humidity"
         },
         "data_description": {
-          "target_feels_like": "Default comfort target when the system is first enabled"
+          "target_feels_like": "The temperature you want it to feel like (dashboard shows this target)",
+          "target_humidity": "Maximum comfortable humidity level (system prioritizes dehumidification above this percentage)"
         }
       }
     }
@@ -73,6 +77,9 @@
           },
           "humidity_priority": {
             "name": "Humidity Priority Mode"
+          },
+          "target_humidity": {
+            "name": "Target Humidity"
           }
         }
       }
@@ -122,6 +129,10 @@
     "invalid_sensor_reading": {
       "title": "Smart Comfort Climate invalid sensor reading",
       "description": "The {sensor_type} sensor '{entity_id}' is providing invalid readings. Current value: '{value}'.\n\nSmart Comfort Climate requires valid numeric sensor readings for:\n- Temperature sensors: numeric value in degrees\n- Humidity sensors: numeric value between 0-100%\n\nPlease check sensor calibration and connectivity."
+    },
+    "humidity_too_high": {
+      "title": "Smart Comfort Climate humidity target exceeded",
+      "description": "Current humidity ({current_humidity}%) is significantly above your target ({target_humidity}%). The system is working to dehumidify but may need attention.\n\nPossible causes:\n- External humidity sources (cooking, showers, weather)\n- HVAC system needs maintenance\n- Humidity sensor calibration issues\n- Target humidity set too low for current conditions"
     }
   },
   "exceptions": {
@@ -130,6 +141,9 @@
     },
     "climate_control_failed": {
       "message": "Failed to control climate entity: {error}"
+    },
+    "humidity_target_invalid": {
+      "message": "Humidity target must be between 30% and 70%"
     }
   }
 }
